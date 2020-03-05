@@ -7,7 +7,7 @@ If you use this work, please cite it as:
 ```bibtex
 @inproceedings{sarandi2020metro,
   title={Metric-Scale Truncation-Robust Heatmaps for 3{D} Human Pose Estimation},
-  author={S\'{a}r\'{a}ndi, Istv\'{a}n and Linder, Timm and Arras, Kai O. and Leibe, Bastian},
+  author={S\'ar\'andi, Istv\'an and Linder, Timm and Arras, Kai O. and Leibe, Bastian},
   booktitle={Automatic Face and Gesture Recognition, 2020 IEEE Int. Conf. on},
   year={2020},
   note={in press}
