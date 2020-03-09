@@ -1,6 +1,8 @@
-# MeTRo 3D Human Pose Estimator
+## MeTRo 3D Human Pose Estimator
 
-Code to train and evaluate the MeTRo method, proposed in "Metric-Scale Truncation-Robust Heatmaps for 3D Human Pose Estimation" (Sárándi et al., 2020). A preprint of the paper is on arXiv: https://arxiv.org/abs/
+*-- coming in a few days --*
+
+Code to train and evaluate the MeTRo method, proposed in "Metric-Scale Truncation-Robust Heatmaps for 3D Human Pose Estimation" (Sárándi et al., 2020). A preprint of the paper is on arXiv: https://arxiv.org/abs/2003.02953
 
 If you use this work, please cite it as:
 
@@ -13,5 +15,3 @@ If you use this work, please cite it as:
   note={in press}
 }
 ```
-
-... check back in a few days!
