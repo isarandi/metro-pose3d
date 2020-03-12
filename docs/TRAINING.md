@@ -16,8 +16,10 @@ $ ./main.py \
 
 $ ./main.py \
     --train --dataset=mpi-inf-3dhp --train-on=trainval --epochs=27 --seed=1 \
-    --universal-skeletons --logdir=h36m/metro_univ_seed1 --print-log --gui
+    --background-aug-prob=0.7 \
+    --universal-skeleton --logdir=3dhp/metro_univ_seed1 --print-log --gui
 $ ./main.py \
     --train --dataset=mpi-inf-3dhp --train-on=trainval --epochs=27 --seed=1 \
-    --no-universal-skeletons --logdir=h36m/metro_nonuniv_seed1 --print-log --gui
+    --background-aug-prob=0.7 \
+    --no-universal-skeleton --logdir=3dhp/metro_nonuniv_seed1 --print-log --gui
 ```
