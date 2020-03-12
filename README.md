@@ -12,9 +12,7 @@ It's a 3D human pose estimator. It takes a single **RGB image of a person as inp
  
 #### How do I run it?
 
-Check out the [Live Demo here]().
-
-If you want run inference on your own machine, see [INFERENCE.md](docs/INFERENCE.md).
+Stay tuned for inference instructions and pretrained models!
 
 #### How do I train it?
 See [DATASETS.md](docs/DATASETS.md) on how to download and prepare the training and test data.
