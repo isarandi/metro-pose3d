@@ -8,7 +8,7 @@ Code to train and evaluate the MeTRo method, proposed in our paper
 
 #### What does it do?
 
-It's a 3D human pose estimator. It takes a single **RGB image of a person as input** and returns the **3D coordinates of 17 body joints** relative to the pelvis. The coordinates are estimated in millimeters. It always returns a complete pose by guessing joint positions even outside of the image.  
+It takes a single **RGB image of a person as input** and returns the **3D coordinates of 17 body joints** relative to the pelvis. The coordinates are estimated in millimeters directly. Also, it always returns a complete pose by guessing joint positions even outside of the image boundaries (truncation).  
  
 #### How do I run it?
 
