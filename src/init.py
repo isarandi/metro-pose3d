@@ -59,7 +59,6 @@ def initialize():
         raise ValueError(f'Training dtype {FLAGS.dtype} not supported, only float16/32.')
 
     # We parallelize on a coarser level already, openmp just makes things slower
-    os.environ['OMP_NUM_THREADS'] = '1'
 
     # Override the default data format in slim layers
     enter_context(slim.arg_scope(

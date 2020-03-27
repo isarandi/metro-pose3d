@@ -162,6 +162,10 @@ def get_dtype():
     return _DTYPE
 
 
+def get_numpy_dtype():
+    return {tf.float32: np.float32, tf.float16: np.float16}[_DTYPE]
+
+
 def set_dtype(dtype):
     global _DTYPE
     _DTYPE = dtype

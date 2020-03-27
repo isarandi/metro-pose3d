@@ -18,9 +18,6 @@ def support_single(f):
             return f(self, np.array([points]), *args, **kwargs)[0]
         else:
             return f(self, points, *args, **kwargs)
-        # else:
-        #    raise Exception(f'Wrong number of dimensions in points array: {ndim}, should be 1 or
-        #    2')
 
     return wrapped
 
@@ -90,7 +87,10 @@ class Camera:
     def create2D(imshape=(0, 0)):
         intrinsics = np.eye(3)
         intrinsics[:2, 2] = [imshape[1] / 2, imshape[0] / 2]
-        return Camera([0, 0, 0], np.eye(3), intrinsics, None)
+        return Camera(intrinsic_matrix=intrinsics)
+
+    def shift_image(self, offset):
+        self.intrinsic_matrix[:2, 2] += offset
 
     def rotate(self, yaw=0, pitch=0, roll=0):
         mat = transforms3d.euler.euler2mat(yaw, pitch, roll, 'ryxz').T
@@ -232,7 +232,7 @@ class Camera:
         return self.intrinsic_matrix @ extrinsic_projection
 
     def get_extrinsic_matrix(self):
-        return np.block([[self.R, -R @ np.expand_dims(self.t, -1)], [0, 0, 0, 1]])
+        return np.block([[self.R, -self.R @ np.expand_dims(self.t, -1)], [0, 0, 0, 1]])
 
     def copy(self):
         return copy.deepcopy(self)
@@ -282,8 +282,8 @@ def reproject_image(
     # 1. Simplest case: if only the intrinsics have changed we can use an affine warp
     if (np.allclose(new_camera.R, old_camera.R) and
             allclose_or_nones(new_camera.distortion_coeffs, old_camera.distortion_coeffs)):
-        relative_intrinsics_inv = (
-                old_camera.intrinsic_matrix @ np.linalg.inv(new_camera.intrinsic_matrix))
+        relative_intrinsics_inv = np.linalg.solve(
+            new_camera.intrinsic_matrix.T, old_camera.intrinsic_matrix.T).T
         scaling_factor = 1 / np.linalg.norm(relative_intrinsics_inv[:2, 0])
         if interp is None:
             interp = cv2.INTER_LINEAR if scaling_factor > 1 else cv2.INTER_AREA
@@ -409,7 +409,7 @@ def reproject_image_fast(
 
     old_matrix = old_camera.intrinsic_matrix @ old_camera.R
     new_matrix = new_camera.intrinsic_matrix @ new_camera.R
-    homography = (old_matrix @ np.linalg.inv(new_matrix)).astype(np.float32)
+    homography = np.linalg.solve(new_matrix.T, old_matrix.T).T.astype(np.float32)
 
     coords = get_grid_coords(tuple(list(output_imshape)))
     coords = homography @ coords
@@ -430,9 +430,9 @@ def reproject_image_fast(
 
 
 def reproject_image_points_fast(points, old_camera, new_camera):
-    homography = (
-            new_camera.intrinsic_matrix @ new_camera.R @ np.linalg.inv(old_camera.R) @
-            np.linalg.inv(old_camera.intrinsic_matrix)).astype(np.float32)
+    old_matrix = old_camera.intrinsic_matrix @ old_camera.R
+    new_matrix = new_camera.intrinsic_matrix @ new_camera.R
+    homography = np.linalg.solve(new_matrix.T, old_matrix.T).T.astype(np.float32)
     pointsT = homography[:, :2] @ points.T + homography[:, 2:]
     pointsT = pointsT[:2] / pointsT[2:]
     return pointsT.T

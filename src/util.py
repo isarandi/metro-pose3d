@@ -274,6 +274,8 @@ def get_all_from_queue(q):
 def init_worker_process():
     import os
     os.environ['OMP_NUM_THREADS'] = '1'
+    os.environ['KMP_INIT_AT_FORK'] = 'FALSE'
+
     terminate_on_parent_death()
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
@@ -304,6 +306,7 @@ def random_uniform_disc(rng):
 def init_worker_process_flags(flags):
     import os
     os.environ['OMP_NUM_THREADS'] = '1'
+    os.environ['KMP_INIT_AT_FORK'] = 'FALSE'
     from init import FLAGS
     for key in flags.__dict__:
         setattr(FLAGS, key, getattr(flags, key))
@@ -378,39 +381,6 @@ class ReconnectingClient:
         self.conn.close()
 
 
-class ParseFromFileAction(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        with values as f:
-            lines = f.read().splitlines()
-            args = [f'--{line}' for line in lines if line and not line.startswith('#')]
-            parser.parse_args(args, namespace)
-
-
-class HyphenToUnderscoreAction(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, self.dest, values.replace('-', '_'))
-
-
-class YesNoAction(argparse.Action):
-    def __init__(self, option_strings, dest, default=False, required=False, help=None):
-        positive_opts = option_strings
-        if not all(opt.startswith('--') for opt in positive_opts):
-            raise ValueError('Yes/No arguments must be prefixed with --')
-        if any(opt.startswith('--no-') for opt in positive_opts):
-            raise ValueError(
-                'Yes/No arguments cannot start with --no-, the --no- version will be '
-                'auto-generated')
-
-        negative_opts = ['--no-' + opt[2:] for opt in positive_opts]
-        opts = [*positive_opts, *negative_opts]
-        super().__init__(
-            opts, dest, nargs=0, const=None, default=default, required=required, help=help)
-
-    def __call__(self, parser, namespace, values, option_string=None):
-        if option_string.startswith('--no-'):
-            setattr(namespace, self.dest, False)
-        else:
-            setattr(namespace, self.dest, True)
 
 
 def is_file_newer(path, min_time=None):

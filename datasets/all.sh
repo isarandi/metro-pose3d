@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ask(){
+ask() {
   while true; do
-      read -rp "$1" yn
-      case $yn in
-          [Yy]* ) echo y; break;;
-          [Nn]* ) echo n;;
-          * ) echo "Please answer yes or no.";;
-      esac
+    read -rp "$1" yn
+    case $yn in
+    [Yy]*)
+      echo y
+      break
+      ;;
+    [Nn]*) echo n ;;
+    *) echo "Please answer yes or no." ;;
+    esac
   done
 }
 
-if [[ $(ask "The Human3.6M, MPII, Pascal VOC, MPI-INF-3DHP and INRIA Holidays datasets are each from third parties. Have you read and do you agree with their respective licenses? [y/n]") != 'y' ]]; then
-    echo "Then no cookies for you! Go read all the licenses!"
-    exit 1
+if [[ $(ask "The Human3.6M, MPII, Pascal VOC, MPI-INF-3DHP and INRIA Holidays datasets are each from third parties.
+ Have you read and agreed to their respective licenses? [y/n] ") != 'y' ]]; then
+  echo "Then no cookies for you! Go read all the licenses!"
+  exit 1
 fi
 
 # Find out the location of this script and cd into it

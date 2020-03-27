@@ -1,6 +1,8 @@
 import functools
 
-import geom
+import numpy as np
+
+import cameralib
 import improc
 import paths
 import util
@@ -15,11 +17,14 @@ def get_inria_holiday_background_paths():
 
 def augment_background(im, fgmask, rng):
     path = util.choice(get_inria_holiday_background_paths(), rng)
-    background_im = improc.imread_jpeg_fast(path)
+    background_im = improc.imread_jpeg(path)
 
-    tr = geom.SimTransform()
-    imside = im.shape[0]
-    tr = (tr.center_fill(background_im.shape[:2], im.shape[:2], factor=rng.uniform(1.2, 1.5)).
-          translate(rng.uniform(-imside * 0.1, imside * 0.1, size=2)))
-    warped_background_im = tr.transform_image(background_im, dst_shape=im.shape[:2])
+    cam = cameralib.Camera.create2D(background_im.shape)
+    cam_new = cam.copy()
+
+    zoom_aug_factor = rng.uniform(1.2, 1.5)
+    cam_new.zoom(zoom_aug_factor * np.max(im.shape[:2] / np.asarray(background_im.shape[:2])))
+    cam_new.center_principal_point(im.shape)
+    cam_new.shift_image(util.random_uniform_disc(rng) * im.shape[0] * 0.1)
+    warped_background_im = cameralib.reproject_image(background_im, cam, cam_new, im.shape)
     return improc.blend_image(warped_background_im, im, fgmask)

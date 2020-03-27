@@ -1,4 +1,3 @@
-import concurrent.futures
 import contextlib
 import glob
 import logging
@@ -10,8 +9,6 @@ import signal
 import threading
 import time
 
-import h5py
-import matplotlib.animation
 import numpy as np
 import tensorflow as tf
 
@@ -22,7 +19,6 @@ import tfu
 import util
 
 mp_spawn = mp.get_context('spawn')
-
 
 
 @tfasync.coroutine_hook
@@ -54,77 +50,6 @@ async def collect_hook(fetches_to_collect=None):
         return concatenate_atleast_1d(results)
 
     return [concatenate_atleast_1d(result_column) for result_column in zip(*results)]
-
-
-@tfasync.coroutine_hook
-async def imshow_hook(
-        image_tensors, image_titles, max_cols=np.inf, share_axes=False, window_title=None,
-        interval=1000, batched=False):
-    q = mp_spawn.Queue(30)
-    worker = mp_spawn.Process(
-        target=imshow_worker, args=(q, image_titles, max_cols, share_axes, window_title, interval))
-    worker.start()
-
-    def put_in_queue(images):
-        try:
-            q.put_nowait([tfu.std_to_nhwc(image) for image in images])
-        except queue.Full:
-            pass
-
-    async for images in tfasync.run_iter(image_tensors):
-        if not batched:
-            put_in_queue(images)
-        else:
-            image_batches = images
-            for images in zip(image_batches):
-                put_in_queue(images)
-
-    worker.terminate()
-
-
-def imshow_worker(
-        images_queue, image_titles, max_cols=np.inf, share_axes=False, window_title=None,
-        interval=1000):
-    util.init_worker_process()
-    import matplotlib.pyplot as plt
-    plt.switch_backend('TkAgg')
-
-    cols = min(max_cols, len(image_titles))
-    rows = int(math.ceil(len(image_titles) / cols))
-    fig, axes = plt.subplots(
-        rows, cols, figsize=(cols * 4, rows * 4), subplot_kw={'adjustable': 'box'},
-        squeeze=False, sharex=share_axes, sharey=share_axes)
-    axes = axes.ravel()
-
-    if window_title:
-        fig.canvas.set_window_title(window_title)
-
-    # hide subplots without content
-    for ax in axes[len(image_titles):]:
-        ax.axis('off')
-
-    fig.tight_layout()
-
-    dummy_image = np.full([10, 10, 3], 0.5)
-    ax_images = [ax.imshow(dummy_image, animated=True) for ax in axes]
-    for ax, image_title in zip(axes, image_titles):
-        ax.set_title(image_title)
-
-    def animate(i_frame):
-        try:
-            images = images_queue.get_nowait()
-        except queue.Empty:
-            return ()
-
-        for ar, image in zip(ax_images, images):
-            if image.ndim == 2 or image.shape[-1] == 1:
-                ar.set_clim(np.min(image), np.max(image))
-            ar.set_array(image)
-        return ax_images
-
-    ani = matplotlib.animation.FuncAnimation(
-        fig, animate, save_count=0, interval=interval, blit=False)
-    plt.show()
 
 
 @tfasync.coroutine_hook
@@ -374,15 +299,6 @@ async def send_to_worker_hook(
 
 
 @tfasync.coroutine_hook
-async def send_to_other_process_hook(fetches, address=('localhost', 6020), block=False):
-    """Sends the values of `tensors` after each run to another process."""
-
-    with util.ReconnectingClient(address) as conn:
-        async for values in tfasync.run_iter(fetches):
-            conn.send(values)
-
-
-@tfasync.coroutine_hook
 async def rate_limit_hook(max_runs_per_second):
     """Rate limits the loop if it would run faster than `max_runs_per_second`, by blocking the
     loop thread for the necessary amount of time."""
@@ -397,67 +313,6 @@ async def rate_limit_hook(max_runs_per_second):
         last_time = current_time
 
         await tfasync.run([])
-
-
-def sanitize_dtype(dtype):
-    if dtype == np.dtype('object'):
-        return h5py.special_dtype(vlen=str)
-    return dtype
-
-
-def sanitize_array(arr):
-    if arr.dtype == np.dtype('object'):
-        return arr.astype('<U256')
-    return arr
-
-
-@tfasync.coroutine_hook
-async def save_as_hdf5(tensors, names, path):
-    util.ensure_path_exists(path)
-    with h5py.File(path, 'w') as f:
-        shapes = [t.get_shape().as_list() for t in tensors]
-
-        # Create empty datasets first
-        datasets = [
-            f.create_dataset(
-                name, shape=(0, *shape[1:]), maxshape=(None, *shape[1:]),
-                dtype=sanitize_dtype(tensor.dtype.as_numpy_dtype))
-            for tensor, name, shape in zip(tensors, names, shapes)]
-
-        def concatenate_to_datsets(arrays):
-            for dataset, array in zip(datasets, arrays):
-                dataset.resize(dataset.shape[0] + array.shape[0], axis=0)
-                dataset[-array.shape[0]:, ...] = sanitize_array(array)
-
-        await process_all_in_thread(concatenate_to_datsets, tensors)
-
-
-@tfasync.coroutine_hook
-async def feed_from_hdf5(tensors, names, path, batch_size):
-    with h5py.File(path, 'r') as f:
-        n_total = len(f[names[0]])
-        for i_start in range(0, n_total, batch_size):
-            feed_dict = {
-                tensor: f[name][i_start:i_start + batch_size]
-                for tensor, name in zip(tensors, names)}
-            await tfasync.run([], feed_dict=feed_dict)
-
-
-@tfasync.coroutine_hook
-async def feed_in_batches(full_feed_dict, batch_size):
-    n_total = len(next(iter(full_feed_dict.values())))
-    for i_start in range(0, n_total, batch_size):
-        feed_dict = {
-            tensor: array[i_start:i_start + batch_size]
-            for tensor, array in full_feed_dict.items()}
-        await tfasync.run([], feed_dict=feed_dict)
-
-
-async def process_all_in_thread(func, tensors, max_workers=1):
-    exec = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
-    async for arrays in tfasync.run_iter(tensors):
-        exec.submit(func, arrays)
-    exec.shutdown()
 
 
 def make_chain_handler(first_handler, second_handler):

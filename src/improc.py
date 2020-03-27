@@ -5,7 +5,6 @@ import subprocess
 import PIL
 import cv2
 import imageio
-import jpeg4py
 import numba
 import numpy as np
 import pycocotools.mask
@@ -15,8 +14,7 @@ def encode_mask(mask):
     return pycocotools.mask.encode(np.asfortranarray(mask.astype(np.uint8)))
 
 
-def decode_mask(encoded_mask):
-    return pycocotools.mask.decode(encoded_mask)
+decode_mask = pycocotools.mask.decode
 
 
 def resize_by_factor(im, factor, interp=None):
@@ -29,32 +27,6 @@ def resize_by_factor(im, factor, interp=None):
     return cv2.resize(im, new_size, fx=factor, fy=factor, interpolation=interp)
 
 
-def num_frames_of_video(path):
-    with imageio.get_reader(path) as vid:
-        return vid.get_meta_data()['nframes']
-
-
-def figure_to_image(fig):
-    img = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
-    width, height = fig.canvas.get_width_height()
-    return img.reshape([height, width, 3])
-
-
-def remove_small_components(mask, min_size, inplace=False, connectivity=8):
-    n_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-        mask, connectivity, cv2.CV_32S)
-    is_small = stats[:, -1] < min_size
-    ids_small = np.squeeze(np.argwhere(is_small), axis=-1)
-
-    if not inplace:
-        mask = mask.copy()
-
-    for i in ids_small:
-        mask[labels == i] = 0
-
-    return mask
-
-
 @functools.lru_cache()
 def get_structuring_element(shape, ksize, anchor=None):
     if not isinstance(ksize, tuple):
@@ -62,26 +34,8 @@ def get_structuring_element(shape, ksize, anchor=None):
     return cv2.getStructuringElement(shape, ksize, anchor)
 
 
-def largest_connected_component(mask):
-    mask = mask.astype(np.uint8)
-    n_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, 4, cv2.CV_32S)
-    areas = stats[1:, -1]
-    if len(areas) < 1:
-        return mask, np.array([0, 0, 0, 0])
-
-    largest_area_label = 1 + np.argsort(areas)[-1]
-    obj_mask = np.uint8(labels == largest_area_label)
-    obj_box = stats[largest_area_label, :4]
-
-    return obj_mask, np.array(obj_box)
-
-
 def rounded_int_tuple(p):
     return tuple(np.round(p).astype(int))
-
-
-def rectangle(im, pt1, pt2, *args, **kwargs):
-    cv2.rectangle(im, rounded_int_tuple(pt1), rounded_int_tuple(pt2), *args, **kwargs)
 
 
 def image_extents(filepath):
@@ -91,27 +45,40 @@ def image_extents(filepath):
         return np.asarray(im.size)
 
 
-def normalize_01(im):
-    result = np.empty_like(im, dtype=np.float32)
-    # cv2.normalize(im, dst=result, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-    cv2.divide(im, (255, 255, 255, 255), dst=result, dtype=cv2.CV_32F)
-    np.clip(result, 0, 1, out=result)
-    return result
+@numba.jit(nopython=True)
+def normalize_plusminus1(im):
+    im = im.astype(np.float32)
+    im /= 127.5
+    im -= 1
+    im = np.minimum(np.maximum(np.float32(-1), im), np.float32(1))
+    return im
 
 
-def imread_jpeg_fast(path):
+@numba.jit(nopython=True)
+def blend_image_numba(im1, im2, im2_weight):
+    return im1 * (1 - im2_weight) + im2 * im2_weight
+
+
+def imread_jpeg(path):
     if isinstance(path, bytes):
         path = path.decode('utf8')
     elif isinstance(path, np.str):
         path = str(path)
 
-    try:
-        return jpeg4py.JPEG(path).decode()
-    except jpeg4py.JPEGRuntimeError:
-        logging.error(f'Could not load image at {path}, JPEG error.')
-        raise
+    # Set to True for faster image loading if you have libjpeg-turbo set up
+    use_libjpeg_turbo = False
+    if use_libjpeg_turbo:
+        import jpeg4py
+        try:
+            return jpeg4py.JPEG(path).decode()
+        except jpeg4py.JPEGRuntimeError:
+            logging.error(f'Could not load image at {path}, JPEG error.')
+            raise
+    else:
+        return imageio.imread(path)
 
 
+@numba.jit(nopython=True)
 def paste_over(im_src, im_dst, alpha, center, inplace=False):
     """Pastes `im_src` onto `im_dst` at a specified position, with alpha blending.
 
@@ -131,15 +98,18 @@ def paste_over(im_src, im_dst, alpha, center, inplace=False):
         An image of the same shape as `im_dst`, with `im_src` pasted onto it.
     """
 
-    width_height_src = np.asarray([im_src.shape[1], im_src.shape[0]])
-    width_height_dst = np.asarray([im_dst.shape[1], im_dst.shape[0]])
+    width_height_src = np.array([im_src.shape[1], im_src.shape[0]], dtype=np.int32)
+    width_height_dst = np.array([im_dst.shape[1], im_dst.shape[0]], dtype=np.int32)
 
-    center = np.round(center).astype(np.int32)
-    ideal_start_dst = center - width_height_src // 2
+    center_float = center.astype(np.float32)
+    np.round(center_float, 0, center_float)
+    center_int = center_float.astype(np.int32)
+    ideal_start_dst = center_int - width_height_src // np.int32(2)
     ideal_end_dst = ideal_start_dst + width_height_src
 
-    start_dst = np.clip(ideal_start_dst, 0, width_height_dst)
-    end_dst = np.clip(ideal_end_dst, 0, width_height_dst)
+    zeros = np.zeros_like(ideal_start_dst)
+    start_dst = np.minimum(np.maximum(ideal_start_dst, zeros), width_height_dst)
+    end_dst = np.minimum(np.maximum(ideal_end_dst, zeros), width_height_dst)
 
     if inplace:
         result = im_dst
@@ -151,17 +121,13 @@ def paste_over(im_src, im_dst, alpha, center, inplace=False):
     start_src = start_dst - ideal_start_dst
     end_src = width_height_src + (end_dst - ideal_end_dst)
 
-    if alpha is None:
-        alpha = np.ones(im_src.shape[:2], dtype=np.float32)
-
-    if alpha.ndim < im_src.ndim:
-        alpha = np.expand_dims(alpha, -1)
-    alpha = alpha[start_src[1]:end_src[1], start_src[0]:end_src[0]]
+    alpha_expanded = np.expand_dims(alpha > 0.5, -1).astype(np.uint8)
+    alpha_expanded = alpha_expanded[start_src[1]:end_src[1], start_src[0]:end_src[0]]
 
     region_src = im_src[start_src[1]:end_src[1], start_src[0]:end_src[0]]
 
     result[start_dst[1]:end_dst[1], start_dst[0]:end_dst[0]] = (
-            alpha * region_src + (1 - alpha) * region_dst)
+            alpha_expanded * region_src + (np.uint8(1) - alpha_expanded) * region_dst)
     return result
 
 
@@ -195,7 +161,7 @@ def blend_image_numba(im1, im2, im2_weight):
 
 def is_image_readable(path):
     return subprocess.call(
-        ['/usr/bin/identify', path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
+        ['identify', path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) == 0
 
 
 def white_balance(img, a=None, b=None):

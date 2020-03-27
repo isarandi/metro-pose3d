@@ -17,7 +17,7 @@ import util
 
 
 @util.cache_result_on_disk(f'{paths.CACHE_DIR}/3dhp.pkl', min_time="2019-11-14T23:29:34")
-def make_mpi_inf_3dhp(ts6_corr=False, camera_ids=(0, 1, 2, 4, 5, 6, 7, 8)):
+def make_mpi_inf_3dhp(camera_ids=(0, 1, 2, 4, 5, 6, 7, 8)):
     all_short_names = (
         'spi3,spi4,spi2,spin,pelv,neck,head,htop,lcla,lsho,lelb,lwri,lhan,rcla,rsho,relb,rwri,'
         'rhan,lhip,lkne,lank,lfoo,ltoe,rhip,rkne,rank,rfoo,rtoe'.split(','))
@@ -125,10 +125,7 @@ def make_mpi_inf_3dhp(ts6_corr=False, camera_ids=(0, 1, 2, 4, 5, 6, 7, 8)):
         'Stand/Walk', 'Exercise', 'Sit on Chair', 'Reach/Crouch', 'On Floor', 'Sports', 'Misc.']
     for i_subject in range(1, 7):
         seqpath = f'{root_3dhp}/TS{i_subject}'
-        if ts6_corr and i_subject == 6:
-            annotation_path = f'{seqpath}/annot_data-corr.mat'
-        else:
-            annotation_path = f'{seqpath}/annot_data.mat'
+        annotation_path = f'{seqpath}/annot_data.mat'
 
         with h5py.File(annotation_path, 'r') as m:
             cam3d_coords = np.array(m['annot3'])[:, 0, test_set_selected_joints]
@@ -201,7 +198,7 @@ def make_efficient_example(ex):
     new_im_path = os.path.join(paths.DATA_ROOT, new_im_relpath)
     if not (util.is_file_newer(new_im_path, "2019-11-14T23:32:07") and
             improc.is_image_readable(new_im_path)):
-        im = improc.imread_jpeg_fast(f'{paths.DATA_ROOT}/{image_relpath}')
+        im = improc.imread_jpeg(f'{paths.DATA_ROOT}/{image_relpath}')
         new_im = cameralib.reproject_image(im, ex.camera, new_camera, dst_shape)
         util.ensure_path_exists(new_im_path)
         imageio.imwrite(new_im_path, new_im)
@@ -247,10 +244,8 @@ def load_cameras(camcalib_path):
         intrinsic_matrix = np.reshape(to_array(match['intrinsic']), [4, 4])[:3, :3]
         extrinsic_matrix = np.reshape(to_array(match['extrinsic']), [4, 4])
         R = extrinsic_matrix[:3, :3]
-        # TODO following should be -R.T, but kept for now for compatibility
-        # it makes no difference unless multiple cameras of the same scene are used
-        eye = R.T @ extrinsic_matrix[:3, 3]
-        return cameralib.Camera(eye, R, intrinsic_matrix, None, world_up=(0, 1, 0))
+        optical_center = -R.T @ extrinsic_matrix[:3, 3]
+        return cameralib.Camera(optical_center, R, intrinsic_matrix, None, world_up=(0, 1, 0))
 
     camcalib_text = util.read_file(camcalib_path)
     pattern = (

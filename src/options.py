@@ -1,12 +1,10 @@
 import argparse
 
-import util
-
 
 def get_parser():
     parser = argparse.ArgumentParser(description='MeTRo-Pose3D', allow_abbrev=False)
     # Essentials
-    parser.add_argument('--file', type=open, action=util.ParseFromFileAction)
+    parser.add_argument('--file', type=open, action=ParseFromFileAction)
     parser.add_argument('--logdir', type=str, default='default_logdir',
                         help='Directory for saving data about the experiment, including '
                              'checkpoints, logs, results, tensorboard event files etc. Can be a '
@@ -15,17 +13,18 @@ def get_parser():
                         help='Number of parallel workers to run.')
 
     # Task options (what to do)
-    parser.add_argument('--train', action=util.YesNoAction, help='Train the model.')
-    parser.add_argument('--test', action=util.YesNoAction, help='Test the model.')
+    parser.add_argument('--train', action=YesNoAction, help='Train the model.')
+    parser.add_argument('--test', action=YesNoAction, help='Test the model.')
+    parser.add_argument('--export-file', type=str, help='Export filename.')
 
     # Monitoring options
-    parser.add_argument('--gui', action=util.YesNoAction,
+    parser.add_argument('--gui', action=YesNoAction,
                         help='Create graphical user interface for visualization.')
     parser.add_argument('--hook-seconds', type=float, default=15,
                         help='How often to call log, imshow and summary hooks.')
-    parser.add_argument('--print-log', action=util.YesNoAction,
+    parser.add_argument('--print-log', action=YesNoAction,
                         help='Print the log to the standard output (besides saving to file).')
-    parser.add_argument('--tensorboard', action=util.YesNoAction, default=True,
+    parser.add_argument('--tensorboard', action=YesNoAction, default=True,
                         help='Apply augmentations to test images.')
 
     # Loading and input processing options
@@ -41,10 +40,10 @@ def get_parser():
                         To restore for resuming an existing training use the --load-path option.""")
     parser.add_argument('--proc-side', type=int, default=256,
                         help='Side length of image as processed by network.')
-    parser.add_argument('--geom-aug', action=util.YesNoAction, default=True,
+    parser.add_argument('--geom-aug', action=YesNoAction, default=True,
                         help='Training data augmentations such as rotation, scaling, translation '
                              'etc.')
-    parser.add_argument('--test-aug', action=util.YesNoAction,
+    parser.add_argument('--test-aug', action=YesNoAction,
                         help='Apply augmentations to test images.')
     parser.add_argument('--rot-aug', type=float,
                         help='Rotation augmentation in degrees.', default=20)
@@ -89,7 +88,7 @@ def get_parser():
     # Test options
     parser.add_argument('--batch-size', type=int, default=32)
     parser.add_argument('--batch-size-test', type=int, default=110)
-    parser.add_argument('--multiepoch-test', action=util.YesNoAction)
+    parser.add_argument('--multiepoch-test', action=YesNoAction)
     parser.add_argument('--data-format', type=str, default='NCHW',
                         help='Data format used internally. NCHW is faster than NHWC.')
 
@@ -103,28 +102,27 @@ def get_parser():
     parser.add_argument('--comment', type=str, default=None)
 
     parser.add_argument('--dataset2d', type=str, default='mpii',
-                        action=util.HyphenToUnderscoreAction)
+                        action=HyphenToUnderscoreAction)
 
     parser.add_argument('--dataset', type=str, default='h36m',
-                        action=util.HyphenToUnderscoreAction)
+                        action=HyphenToUnderscoreAction)
     parser.add_argument('--architecture', type=str, default='resnet_v2_50',
-                        action=util.HyphenToUnderscoreAction,
+                        action=HyphenToUnderscoreAction,
                         help='Architecture of the predictor network.')
     parser.add_argument('--result-path', type=str, default=None)
-    parser.add_argument('--load-pretrained', type=str, default=None)
     parser.add_argument('--depth', type=int, default=8,
                         help='Number of voxels along the z axis for volumetric prediction')
-    parser.add_argument('--train-mixed', action=util.YesNoAction, default=True)
+    parser.add_argument('--train-mixed', action=YesNoAction, default=True)
     parser.add_argument('--batch-size-2d', type=int, default=32)
 
-    parser.add_argument('--centered-stride', action=util.YesNoAction, default=True)
+    parser.add_argument('--centered-stride', action=YesNoAction, default=True)
     parser.add_argument('--box-size-mm', type=float, default=2200)
-    parser.add_argument('--universal-skeleton', action=util.YesNoAction)
-    parser.add_argument('--shift-aug-by-rot', action=util.YesNoAction, default=True,
+    parser.add_argument('--universal-skeleton', action=YesNoAction)
+    parser.add_argument('--shift-aug-by-rot', action=YesNoAction, default=True,
                         help='Apply the translation augmentation by out-of-plane camera rotation.')
 
-    parser.add_argument('--partial-visibility', action=util.YesNoAction)
-    parser.add_argument('--init-logits-random', action=util.YesNoAction, default=True)
+    parser.add_argument('--partial-visibility', action=YesNoAction)
+    parser.add_argument('--init-logits-random', action=YesNoAction, default=True)
 
     parser.add_argument('--loss2d-factor', type=float, default=0.1)
     parser.add_argument('--tdhp-to-mpii-shift-factor', type=float, default=0.2)
@@ -133,5 +131,40 @@ def get_parser():
 
     parser.add_argument('--occlude-aug-prob', type=float, default=0.7)
     parser.add_argument('--background-aug-prob', type=float, default=0)
-    parser.add_argument('--color-aug', action=util.YesNoAction, default=True)
+    parser.add_argument('--color-aug', action=YesNoAction, default=True)
     return parser
+
+
+class ParseFromFileAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        with values as f:
+            lines = f.read().splitlines()
+            args = [f'--{line}' for line in lines if line and not line.startswith('#')]
+            parser.parse_args(args, namespace)
+
+
+class HyphenToUnderscoreAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values.replace('-', '_'))
+
+
+class YesNoAction(argparse.Action):
+    def __init__(self, option_strings, dest, default=False, required=False, help=None):
+        positive_opts = option_strings
+        if not all(opt.startswith('--') for opt in positive_opts):
+            raise ValueError('Yes/No arguments must be prefixed with --')
+        if any(opt.startswith('--no-') for opt in positive_opts):
+            raise ValueError(
+                'Yes/No arguments cannot start with --no-, the --no- version will be '
+                'auto-generated')
+
+        negative_opts = ['--no-' + opt[2:] for opt in positive_opts]
+        opts = [*positive_opts, *negative_opts]
+        super().__init__(
+            opts, dest, nargs=0, const=None, default=default, required=required, help=help)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if option_string.startswith('--no-'):
+            setattr(namespace, self.dest, False)
+        else:
+            setattr(namespace, self.dest, True)

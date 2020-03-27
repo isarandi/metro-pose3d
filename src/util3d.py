@@ -70,20 +70,16 @@ class StickPlot:
     def __init__(self, title, stick_figure_edges, ax, elev=17, azim=47, rang=800):
         self.lines = []
         self.ghost_lines = []
-        # self.path_collection = None
         self.initialized = False
         self.ax = ax
         self.ax.set_title(title)
-        # self.ax.set_aspect('equal')
         self.ax.view_init(elev=elev, azim=azim)
         self.ax.set_xlim3d(-rang, rang)
         self.ax.set_ylim3d(-rang, rang)
         self.ax.set_zlim3d(-rang, rang)
-        # self.ax.auto_scale_xyz()
         self.stick_figure_edges = stick_figure_edges
 
     def initialize(self, coords, ghost_coords=None):
-        # self.path_collection = self.ax.scatter(coords[:, 0], coords[:, 1], coords[:, 2])
         for i_start, i_end in self.stick_figure_edges:
             if ghost_coords is not None:
                 line, = self.ax.plot(*zip(ghost_coords[i_start], ghost_coords[i_end]),

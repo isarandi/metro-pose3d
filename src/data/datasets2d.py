@@ -111,7 +111,7 @@ def make_efficient_example(ex, rect_id):
 
     old_camera = cameralib.Camera.create2D()
     new_camera = old_camera.copy()
-    new_camera.intrinsic_matrix[:2, 2] -= expanded_bbox[:2]
+    new_camera.shift_image(-expanded_bbox[:2])
     new_camera.scale_output(scale_factor)
 
     dst_shape = improc.rounded_int_tuple(scale_factor * expanded_bbox[[3, 2]])
@@ -121,7 +121,7 @@ def make_efficient_example(ex, rect_id):
 
     if not (util.is_file_newer(new_im_path, "2019-11-12T17:54:06") and
             improc.is_image_readable(new_im_path)):
-        im = improc.imread_jpeg_fast(ex.image_path)
+        im = improc.imread_jpeg(ex.image_path)
         new_im = cameralib.reproject_image(im, old_camera, new_camera, dst_shape)
         util.ensure_path_exists(new_im_path)
         imageio.imwrite(new_im_path, new_im)

@@ -84,10 +84,10 @@ def load_and_transform3d(ex, joint_info, learning_phase, rng=None):
     imcoords = cam.world_to_image(metric_world_coords)
 
     image_path = util.ensure_absolute_path(ex.image_path, root=paths.DATA_ROOT)
-    origsize_im = improc.imread_jpeg_fast(image_path)
+    origsize_im = improc.imread_jpeg(image_path)
 
     if ('3dhp' in ex.image_path and
-             re.match('.+/(TS[1-4]|S[1-8])/', ex.image_path)):
+            re.match('.+/(TS[1-4]|S[1-8])/', ex.image_path)):
         origsize_im = improc.adjust_gamma(origsize_im, 0.67, inplace=True)
         origsize_im = improc.white_balance(origsize_im, 110, 145)
 
@@ -100,7 +100,8 @@ def load_and_transform3d(ex, joint_info, learning_phase, rng=None):
         im = augmentation.background.augment_background(im, fgmask, background_rng)
 
     im = augmentation.appearance.augment_appearance(im, learning_phase, appearance_rng)
-    im = improc.normalize_01(im)
+    im = tfu.nhwc_to_std(im)
+    im = improc.normalize_plusminus1(im)
 
     # Joints with NaN coordinates are invalid
     is_joint_in_fov = ~np.logical_or(np.any(imcoords < 0, axis=-1),
@@ -110,7 +111,7 @@ def load_and_transform3d(ex, joint_info, learning_phase, rng=None):
     rot_to_orig_cam = ex.camera.R @ cam.R.T
     rot_to_world = cam.R.T
     inv_intrinsics = np.linalg.inv(cam.intrinsic_matrix)
-    im = tfu.nhwc_to_std(im)
+
 
     return (
         ex.image_path, im, np.nan_to_num(camcoords).astype(np.float32),
@@ -128,7 +129,7 @@ def load_and_transform2d(example, joint_info, learning_phase, rng):
 
     # Load the image
     image_path = util.ensure_absolute_path(example.image_path, root=paths.DATA_ROOT)
-    im_from_file = improc.imread_jpeg_fast(image_path)
+    im_from_file = improc.imread_jpeg(image_path)
 
     # Determine bounding box
     bbox = example.bbox
@@ -167,8 +168,8 @@ def load_and_transform2d(example, joint_info, learning_phase, rng):
 
     im = cameralib.reproject_image(im_from_file, orig_cam, cam, (FLAGS.proc_side, FLAGS.proc_side))
     im = augmentation.appearance.augment_appearance(im, learning_phase, appearance_rng)
-    im = improc.normalize_01(im)
     im = tfu.nhwc_to_std(im)
+    im = improc.normalize_plusminus1(im)
 
     joint_validity_mask = ~np.any(np.isnan(imcoords), axis=1)
     # We must eliminate NaNs because some TensorFlow ops can't deal with any NaNs touching them,

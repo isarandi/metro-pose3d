@@ -1,10 +1,8 @@
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 
-import model.mobilenet_v3
 import model.resnet_v2
 import tfu
-from init import FLAGS
 
 
 def resnet_arg_scope():
@@ -28,7 +26,6 @@ def resnet(inp, n_out, stride=16, centered_stride=False, resnet_name='resnet_v2_
     # if resnet_name == 'mobilenet':
     #     return mobilenet(inp, n_out, stride)
     with slim.arg_scope(resnet_arg_scope()):
-        inp = inp * 2 - 1
         x = tf.cast(inp, tfu.get_dtype())
         resnet_fn = getattr(model.resnet_v2, resnet_name)
         x, end_points = resnet_fn(
@@ -37,11 +34,9 @@ def resnet(inp, n_out, stride=16, centered_stride=False, resnet_name='resnet_v2_
         x = tf.cast(x, tf.float32)
         return x
 
-
 # @tfu.in_variable_scope('Mobilenet', mixed_precision=True)
 # def mobilenet(inp, n_out, stride=16):
 #     with slim.arg_scope(model.mobilenet_v3.training_scope(is_training=tfu.is_training())):
-#         inp = inp * 2 - 1
 #         x = tf.cast(inp, tfu.get_dtype())
 #         print(tfu.static_shape(x))
 #         x, end_points = model.mobilenet_v3.mobilenet(

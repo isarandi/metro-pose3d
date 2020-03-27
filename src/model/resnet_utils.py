@@ -350,13 +350,6 @@ def stack_blocks_dense(net, blocks, output_stride=None,
     return net
 
 
-def suffix(i_branch):
-    if FLAGS.compat_firstnocopy:
-        return '' if i_branch == 0 else '_copy'
-
-    return f'_copy{i_branch}'
-
-
 @add_arg_scope
 def stack_blocks_dense_split(
         net, blocks, n_branches=1, split_at_block=3,

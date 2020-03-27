@@ -127,7 +127,7 @@ def make_efficient_example(ex, further_expansion_factor=1, further_scale_up=1, d
     new_im_path = f'{paths.DATA_ROOT}/{new_im_relpath}'
     if not (util.is_file_newer(new_im_path, "2019-11-14T23:33:14") and
             improc.is_image_readable(new_im_path)):
-        im = improc.imread_jpeg_fast(ex.image_path)
+        im = improc.imread_jpeg(ex.image_path)
         dst_shape = improc.rounded_int_tuple(scale_factor * expanded_bbox[[3, 2]])
         new_im = cameralib.reproject_image(im, ex.camera, new_camera, dst_shape)
         util.ensure_path_exists(new_im_path)

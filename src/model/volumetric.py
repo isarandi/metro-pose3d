@@ -151,70 +151,69 @@ def build_25d_model(joint_info, learning_phase, t, reuse=None):
 
 def build_inference_model(joint_info, learning_phase, t, reuse=None):
     stride = FLAGS.stride_train if learning_phase == TRAIN else FLAGS.stride_test
+    depth = FLAGS.depth
 
-    with tf.name_scope(None, 'Prediction'):
-        depth = FLAGS.depth
+    def im2pred(im, reuse=reuse):
+        net_output = model.architectures.resnet(
+            im, n_out=depth * joint_info.n_joints, scope='MainPart', reuse=reuse,
+            stride=stride, centered_stride=FLAGS.centered_stride,
+            resnet_name=FLAGS.architecture)
+        return net_output_to_heatmap_and_coords(net_output, joint_info)
 
-        def im2pred(im, reuse=reuse):
-            net_output = model.architectures.resnet(
-                im, n_out=depth * joint_info.n_joints, scope='MainPart', reuse=reuse,
-                stride=stride, centered_stride=FLAGS.centered_stride,
-                resnet_name=FLAGS.architecture)
-            return net_output_to_heatmap_and_coords(net_output, joint_info)
+    t.x = tf.identity(t.x, 'input')
+    t.softmaxed, coords3d = im2pred(t.x)
+    t.heatmap_pred_z = tf.reduce_sum(t.softmaxed, axis=[2, 3])
 
-        t.softmaxed, coords3d = im2pred(t.x)
-        t.heatmap_pred_z = tf.reduce_sum(t.softmaxed, axis=[2, 3])
+    if FLAGS.bone_length_dataset:
+        dataset = data.datasets.get_dataset(FLAGS.bone_length_dataset)
+    else:
+        dataset = data.datasets.current_dataset()
+    if 'bone-lengths' in FLAGS.scale_recovery:
+        t.coords2d_pred = coords3d[..., :2]
+        im_pred2d = heatmap_to_image(t.coords2d_pred, learning_phase)
+        im_pred2d_homog = to_homogeneous_coords(im_pred2d)
+        camcoords2d_homog = matmul_joint_coords(t.inv_intrinsics, im_pred2d_homog)
+        delta_z_pred = (coords3d[..., 2] - coords3d[:, -1:, 2]) * FLAGS.box_size_mm
 
-        if FLAGS.bone_length_dataset:
-            dataset = data.datasets.get_dataset(FLAGS.bone_length_dataset)
+        target_bone_lengths = (
+            dataset.trainval_bones if FLAGS.train_on == 'trainval' else dataset.train_bones)
+
+        if FLAGS.scale_recovery == 'bone-lengths-true':
+            bone_lengths_true = get_bone_lengths(t.coords3d_true, joint_info)
+            z_offset_gt_bonelen = optimize_z_offset_by_bones_tensor(
+                camcoords2d_homog, delta_z_pred, bone_lengths_true,
+                joint_info.stick_figure_edges)
+            t.coords3d_pred = back_project(camcoords2d_homog, delta_z_pred, z_offset_gt_bonelen)
         else:
-            dataset = data.datasets.current_dataset()
-        if 'bone-lengths' in FLAGS.scale_recovery:
-            t.coords2d_pred = coords3d[..., :2]
-            im_pred2d = heatmap_to_image(t.coords2d_pred, learning_phase)
-            im_pred2d_homog = to_homogeneous_coords(im_pred2d)
-            camcoords2d_homog = matmul_joint_coords(t.inv_intrinsics, im_pred2d_homog)
-            delta_z_pred = (coords3d[..., 2] - coords3d[:, -1:, 2]) * FLAGS.box_size_mm
+            z_offset = optimize_z_offset_by_bones(
+                camcoords2d_homog, delta_z_pred, target_bone_lengths,
+                joint_info.stick_figure_edges)
+            t.coords3d_pred = back_project(camcoords2d_homog, delta_z_pred, z_offset)
+    elif FLAGS.scale_recovery == 'true-root-depth':
+        t.coords2d_pred = coords3d[..., :2]
+        im_pred2d = heatmap_to_image(t.coords2d_pred, learning_phase)
+        im_pred2d_homog = to_homogeneous_coords(im_pred2d)
+        camcoords2d_homog = matmul_joint_coords(t.inv_intrinsics, im_pred2d_homog)
+        delta_z_pred = (coords3d[..., 2] - coords3d[:, -1:, 2]) * FLAGS.box_size_mm
+        t.coords3d_pred = back_project(
+            camcoords2d_homog, delta_z_pred, t.coords3d_true[:, -1, 2])
+    else:
+        t.coords3d_pred = heatmap_to_metric(coords3d, learning_phase)
 
-            target_bone_lengths = (
-                dataset.trainval_bones if FLAGS.train_on == 'trainval' else dataset.train_bones)
+    t.coords3d_pred_rootrel = tf.identity(tfu3d.root_relative(t.coords3d_pred), 'pred')
+    if 'rot_to_orig_cam' in t:
+        t.coords3d_pred_orig_cam = to_orig_cam(t.coords3d_pred, t.rot_to_orig_cam, joint_info)
+    if 'rot_to_world' in t:
+        t.coords3d_pred_world = to_orig_cam(
+            t.coords3d_pred, t.rot_to_world, joint_info) + tf.expand_dims(t.cam_loc, 1)
 
-            if FLAGS.scale_recovery == 'bone-lengths-true':
-                bone_lengths_true = get_bone_lengths(t.coords3d_true, joint_info)
-                z_offset_gt_bonelen = optimize_z_offset_by_bones_tensor(
-                    camcoords2d_homog, delta_z_pred, bone_lengths_true,
-                    joint_info.stick_figure_edges)
-                t.coords3d_pred = back_project(camcoords2d_homog, delta_z_pred, z_offset_gt_bonelen)
-            else:
-                z_offset = optimize_z_offset_by_bones(
-                    camcoords2d_homog, delta_z_pred, target_bone_lengths,
-                    joint_info.stick_figure_edges)
-                t.coords3d_pred = back_project(camcoords2d_homog, delta_z_pred, z_offset)
-        elif FLAGS.scale_recovery == 'true-root-depth':
-            t.coords2d_pred = coords3d[..., :2]
-            im_pred2d = heatmap_to_image(t.coords2d_pred, learning_phase)
-            im_pred2d_homog = to_homogeneous_coords(im_pred2d)
-            camcoords2d_homog = matmul_joint_coords(t.inv_intrinsics, im_pred2d_homog)
-            delta_z_pred = (coords3d[..., 2] - coords3d[:, -1:, 2]) * FLAGS.box_size_mm
-            t.coords3d_pred = back_project(
-                camcoords2d_homog, delta_z_pred, t.coords3d_true[:, -1, 2])
-        else:
-            t.coords3d_pred = heatmap_to_metric(coords3d, learning_phase)
-
+    if 'coords3d_true' in t:
         t.coords3d_true_rootrel = tfu3d.root_relative(t.coords3d_true)
-        t.coords3d_pred_rootrel = tfu3d.root_relative(t.coords3d_pred)
-
-    if learning_phase == TRAIN:
-        with tf.name_scope(None, 'Loss'):
-            t.loss = tf.reduce_mean(
-                tf.abs(t.coords3d_true_rootrel - t.coords3d_pred_rootrel)) / 1000
-
-    t.coords3d_pred_orig_cam = to_orig_cam(t.coords3d_pred, t.rot_to_orig_cam, joint_info)
-    t.coords3d_true_orig_cam = to_orig_cam(t.coords3d_true, t.rot_to_orig_cam, joint_info)
-    t.coords3d_pred_world = to_orig_cam(
-        t.coords3d_pred, t.rot_to_world, joint_info) + tf.expand_dims(t.cam_loc, 1)
-    t.coords3d_true_world = to_orig_cam(
-        t.coords3d_true, t.rot_to_world, joint_info) + tf.expand_dims(t.cam_loc, 1)
+        if 'rot_to_orig_cam' in t:
+            t.coords3d_true_orig_cam = to_orig_cam(t.coords3d_true, t.rot_to_orig_cam, joint_info)
+        if 'rot_to_world' in t:
+            t.coords3d_true_world = to_orig_cam(
+                t.coords3d_true, t.rot_to_world, joint_info) + tf.expand_dims(t.cam_loc, 1)
 
 
 def matmul_joint_coords(matrices, coords):

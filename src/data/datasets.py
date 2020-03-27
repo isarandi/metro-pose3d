@@ -131,6 +131,21 @@ def current_dataset():
     return get_dataset(FLAGS.dataset)
 
 
+def make_merged():
+    joint_names = ['neck', 'nose', 'lsho', 'lelb', 'lwri', 'lhip', 'lkne', 'lank', 'rsho', 'relb',
+                   'rwri', 'rhip', 'rkne', 'rank', 'leye', 'lear', 'reye', 'rear', 'pelv',
+                   'htop_tdhp', 'neck_tdhp', 'rsho_tdhp', 'lsho_tdhp', 'rhip_tdhp', 'lhip_tdhp',
+                   'spin_tdhp', 'head_tdhp', 'pelv_tdhp', 'rhip_h36m', 'lhip_h36m', 'tors_h36m',
+                   'neck_h36m', 'head_h36m', 'htop_h36m', 'lsho_h36m', 'rsho_h36m', 'pelv_h36m',
+                   'lhip_tdpw', 'rhip_tdpw', 'bell_tdpw', 'che1_tdpw', 'che2_tdpw', 'ltoe_tdpw',
+                   'rtoe_tdpw', 'neck_tdpw', 'lcla_tdpw', 'rcla_tdpw', 'head_tdpw', 'lsho_tdpw',
+                   'rsho_tdpw', 'lhan_tdpw', 'rhan_tdpw', 'pelv_tdpw']
+    edges = [(1, 0), (0, 18), (0, 2), (2, 3), (3, 4), (0, 8), (8, 9), (9, 10), (18, 5), (5, 6),
+             (6, 7), (18, 11), (11, 12), (12, 13), (15, 14), (14, 1), (17, 16), (16, 1)]
+    joint_info = JointInfo(joint_names, edges)
+    return Pose3DDataset(joint_info)
+
+
 @functools.lru_cache()
 def get_dataset(dataset_name):
     from init import FLAGS

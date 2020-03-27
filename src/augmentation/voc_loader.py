@@ -10,15 +10,6 @@ import improc
 import paths
 import util
 
-morph_elem = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (8, 8))
-
-
-def soften_mask(mask):
-    eroded = cv2.erode(mask, morph_elem)
-    result = mask.astype(np.float32)
-    result[eroded < result] = 0.75
-    return result
-
 
 @functools.lru_cache()
 @util.cache_result_on_disk(
@@ -53,7 +44,7 @@ def load_occluders():
         path = f'{pascal_root}/JPEGImages/{image_filename}'
         seg_path = f'{pascal_root}/SegmentationObject/{segmentation_filename}'
 
-        im = improc.imread_jpeg_fast(path)
+        im = improc.imread_jpeg(path)
         labels = np.asarray(PIL.Image.open(seg_path))
 
         for i_obj, (xmin, ymin, xmax, ymax) in boxes:
@@ -71,3 +62,11 @@ def load_occluders():
             image_paths.append(path)
 
     return image_mask_pairs
+
+
+def soften_mask(mask):
+    morph_elem = improc.get_structuring_element(cv2.MORPH_ELLIPSE, (8, 8))
+    eroded = cv2.erode(mask, morph_elem)
+    result = mask.astype(np.float32)
+    result[eroded < result] = 0.75
+    return result

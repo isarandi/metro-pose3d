@@ -22,6 +22,7 @@ import model.bone_length_based_backproj
 import model.volumetric
 import session_hooks
 import tfasync
+import contextlib
 import tensorflow as tf
 import tfu
 import tfu3d
@@ -30,6 +31,7 @@ import util3d
 from init import FLAGS
 from session_hooks import EvaluationMetric
 from tfu import TEST, TRAIN, VALID
+import attrdict
 
 
 def main():
@@ -39,6 +41,44 @@ def main():
         train()
     if FLAGS.test:
         test()
+    if FLAGS.export_file:
+        export()
+
+
+def export():
+    from tensorflow.tools.graph_transforms import TransformGraph
+    t = attrdict.AttrDict()
+    t.x = tf.placeholder(
+        shape=(None, 3, FLAGS.proc_side, FLAGS.proc_side), dtype=tf.float32, name='input')
+    model.volumetric.build_inference_model(data.datasets.current_dataset().joint_info, TEST, t)
+
+    if FLAGS.load_path:
+        if not os.path.isabs(FLAGS.load_path) and FLAGS.checkpoint_dir:
+            load_path = os.path.join(FLAGS.checkpoint_dir, FLAGS.load_path)
+        else:
+            load_path = FLAGS.load_path
+    else:
+        checkpoint = tf.train.get_checkpoint_state(FLAGS.checkpoint_dir)
+        load_path = checkpoint.model_checkpoint_path
+    checkpoint_dir = os.path.dirname(load_path)
+
+    with tf.Session() as sess:
+        saver = tf.train.Saver()
+        saver.restore(sess, load_path)
+        frozen_graph_def = tf.graph_util.convert_variables_to_constants(
+            sess, tf.get_default_graph().as_graph_def(), ['pred'])
+
+        transforms = [
+            'merge_duplicate_nodes',
+            'strip_unused_nodes',
+            'fold_constants(ignore_errors=true)',
+            'fold_batch_norms']
+
+        optimized_graph_def = TransformGraph(frozen_graph_def, [], ['pred'], transforms)
+        tf.train.write_graph(
+            optimized_graph_def, logdir=checkpoint_dir, as_text=False,
+            name=FLAGS.export_file)
+        logging.info(f'Exported the model to {checkpoint_dir}/{FLAGS.export_file}')
 
 
 def train():
@@ -73,7 +113,7 @@ def test():
     dataset = data.datasets.current_dataset()
     if FLAGS.gui:
         plot_hook = session_hooks.send_to_worker_hook(
-            [t.x[0], t.coords3d_pred[0], t.coords3d_true[0]],
+            [(t.x[0] + 1) / 2, t.coords3d_pred[0], t.coords3d_true[0]],
             util3d.plot3d_worker,
             worker_args=[dataset.joint_info.stick_figure_edges],
             worker_kwargs=dict(batched=False, interval=100, has_ground_truth=True),
@@ -153,7 +193,12 @@ def build_graph(
     rng_2d = util.new_rng(rng)
     rng_3d = util.new_rng(rng)
 
-    with tf.name_scope(None, tfu.PHASE_NAME[learning_phase]):
+    @contextlib.contextmanager
+    def empty_context():
+        yield
+
+    name_scope = tf.name_scope(None, 'training') if learning_phase == TRAIN else empty_context()
+    with name_scope:
         if learning_phase == TRAIN and FLAGS.train_mixed:
             examples2d = [*dataset2d.examples[tfu.TRAIN], *dataset2d.examples[tfu.VALID]]
             build_mixed_batch(
@@ -311,8 +356,9 @@ def make_training_hooks(t_train, t_valid):
 
     global_step_tensor = tf.train.get_or_create_global_step()
     checkpoint_hook = tf.train.CheckpointSaverHook(FLAGS.logdir, saver=saver, save_secs=30 * 60)
+    total_batch_size = FLAGS.batch_size * (2 if FLAGS.train_mixed else 1)
     example_counter_hook = session_hooks.log_increment_per_sec(
-        'Examples', t_train.global_step * FLAGS.batch_size, every_n_secs=FLAGS.hook_seconds,
+        'Training images', t_train.global_step * total_batch_size, every_n_secs=FLAGS.hook_seconds,
         summary_output_dir=FLAGS.logdir)
 
     i_epoch = t_train.global_step // (t_train.n_examples // FLAGS.batch_size)
@@ -361,14 +407,15 @@ def make_training_hooks(t_train, t_valid):
     if FLAGS.gui:
         dataset = data.datasets.current_dataset()
         plot_hook = session_hooks.send_to_worker_hook(
-            [t_train.x[0], t_train.coords3d_pred[0], t_train.coords3d_true[0]],
+            [(t_train.x[0] + 1) / 2, t_train.coords3d_pred[0], t_train.coords3d_true[0]],
             util3d.plot3d_worker, worker_args=[dataset.joint_info.stick_figure_edges],
             worker_kwargs=dict(batched=False, interval=100), every_n_secs=FLAGS.hook_seconds,
             use_threading=False)
         hooks.append(plot_hook)
         if 'coords3d_pred_2d' in t_train:
             plot_hook = session_hooks.send_to_worker_hook(
-                [t_train.x_2d[0], t_train.coords3d_pred_2d[0], t_train.coords3d_pred_2d[0]],
+                [(t_train.x_2d[0] + 1) / 2, t_train.coords3d_pred_2d[0],
+                 t_train.coords3d_pred_2d[0]],
                 util3d.plot3d_worker, worker_args=[dataset.joint_info.stick_figure_edges],
                 worker_kwargs=dict(batched=False, interval=100, has_ground_truth=False),
                 every_n_secs=FLAGS.hook_seconds,
@@ -376,28 +423,6 @@ def make_training_hooks(t_train, t_valid):
             hooks.append(plot_hook)
 
     return hooks
-
-
-def imshow_hook(t_train, every_n_steps=None, every_n_secs=None):
-    image_tensors = [t_train.x[0]]
-    image_titles = ['Input image']
-
-    if 'z_logits' in t_train:
-        image_tensors.append(t_train.z_logits[:, 0, :])
-        image_titles.append('depth')
-
-    for i_joint in (2, 3, 4):
-        if 'heatmap_pred' in t_train:
-            image_tensors.append(tfu.get_channel(t_train.heatmap_pred[0], i_joint))
-            image_titles.append(f'heatmap_pred_joint_{i_joint}')
-
-    if 'stick_figure_pred_2d' in t_train:
-        image_tensors.append(t_train.stick_figure_pred_2d[0])
-        image_titles.append(f'2D pred')
-
-    return session_hooks.imshow_hook(
-        image_tensors, image_titles, every_n_steps=every_n_steps, every_n_secs=every_n_secs,
-        max_cols=3, window_title=FLAGS.logdir)
 
 
 def get_init_fn():
