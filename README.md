@@ -3,13 +3,10 @@
 ![](example.png)
 
 ### What is this?
-
-Code to train and evaluate the MeTRo method, proposed in our paper
-"Metric-Scale Truncation-Robust Heatmaps for 3D Human Pose Estimation" (Sárándi et al., 2020).
- A preprint of the paper is on arXiv: https://arxiv.org/abs/2003.02953
+Code to train and evaluate the MeTRo method, proposed in our paper:
+* István Sárándi, Timm Linder, Kai O. Arras, Bastian Leibe: [*"Metric-Scale Truncation-Robust Heatmaps for 3D Human Pose Estimation"*](https://arxiv.org/abs/2003.02953), IEEE Int. Conf. on Automatic Face and Gesture Recognition 2020.
 
 ### What does it do?
-
 It takes a single **RGB image of a person as input** and returns the **3D coordinates of pre-defined body joints** relative to the pelvis. The coordinates are estimated in millimeters directly. Also, it always returns a complete pose by guessing joint positions even outside of the image boundaries (truncation).  
  
 ### How do I run it?
