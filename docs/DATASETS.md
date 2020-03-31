@@ -1,4 +1,4 @@
-**Note: You don't need to perform all these steps if you simply want to do inference. See INFERENCE.md.**
+**Note: You don't need to perform all these steps if you simply want to do inference. See the 'How do I run it' section in the main README.md.**
 
 ## Dataset Preparation
 To run the experiments (or similar ones) as described in the paper, you need to download and prepare the datasets. This howto will guide you through all of that.
