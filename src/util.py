@@ -381,8 +381,6 @@ class ReconnectingClient:
         self.conn.close()
 
 
-
-
 def is_file_newer(path, min_time=None):
     if min_time is None:
         return os.path.exists(path)
@@ -472,3 +470,7 @@ def ensure_absolute_path(path, root):
         return path
     else:
         return os.path.join(root, path)
+
+
+def invert_permutation(permutation):
+    return np.arange(len(permutation))[np.argsort(permutation)]

@@ -45,42 +45,6 @@ def main():
         export()
 
 
-def export():
-    from tensorflow.tools.graph_transforms import TransformGraph
-    t = attrdict.AttrDict()
-    t.x = tf.placeholder(
-        shape=(None, 3, FLAGS.proc_side, FLAGS.proc_side), dtype=tf.float32, name='input')
-    model.volumetric.build_inference_model(data.datasets.current_dataset().joint_info, TEST, t)
-
-    if FLAGS.load_path:
-        if not os.path.isabs(FLAGS.load_path) and FLAGS.checkpoint_dir:
-            load_path = os.path.join(FLAGS.checkpoint_dir, FLAGS.load_path)
-        else:
-            load_path = FLAGS.load_path
-    else:
-        checkpoint = tf.train.get_checkpoint_state(FLAGS.checkpoint_dir)
-        load_path = checkpoint.model_checkpoint_path
-    checkpoint_dir = os.path.dirname(load_path)
-
-    with tf.Session() as sess:
-        saver = tf.train.Saver()
-        saver.restore(sess, load_path)
-        frozen_graph_def = tf.graph_util.convert_variables_to_constants(
-            sess, tf.get_default_graph().as_graph_def(), ['pred'])
-
-        transforms = [
-            'merge_duplicate_nodes',
-            'strip_unused_nodes',
-            'fold_constants(ignore_errors=true)',
-            'fold_batch_norms']
-
-        optimized_graph_def = TransformGraph(frozen_graph_def, [], ['pred'], transforms)
-        tf.train.write_graph(
-            optimized_graph_def, logdir=checkpoint_dir, as_text=False,
-            name=FLAGS.export_file)
-        logging.info(f'Exported the model to {checkpoint_dir}/{FLAGS.export_file}')
-
-
 def train():
     logging.info('Training phase.')
     rng = np.random.RandomState(FLAGS.seed)
@@ -138,6 +102,64 @@ def test():
         fetches_to_collect=fetch_tensors, load_path=FLAGS.load_path,
         checkpoint_dir=FLAGS.checkpoint_dir, hooks=hooks, init_fn=init_fn)
     save_results(f)
+
+
+def export():
+    from tensorflow.tools.graph_transforms import TransformGraph
+    t = attrdict.AttrDict()
+    t.x = tf.placeholder(
+        shape=[None, FLAGS.proc_side, FLAGS.proc_side, 3], dtype=tf.float32, name='input')
+    t.x = tfu.nhwc_to_std(t.x)
+    joint_info = data.datasets.current_dataset().joint_info
+    model.volumetric.build_inference_model(joint_info, TEST, t)
+
+    # Convert to the original joint order as defined in the original datasets
+    # (i.e. put the pelvis back to its place from the last position,
+    # because this codebase normally uses the last position for the pelvis in all cases for
+    # consistency)
+    if FLAGS.dataset == 'merged':
+        permutation = [0, 1, 18, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+    elif FLAGS.dataset == 'h36m':
+        permutation = [16, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    else:
+        assert FLAGS.dataset == 'mpi_inf_3dhp'
+        permutation = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 17, 14, 15]
+
+    tf.gather(t.coords3d_pred_rootrel, permutation, axis=1, name='output')
+    joint_info = joint_info.permute_joints(permutation)
+
+    if FLAGS.load_path:
+        if not os.path.isabs(FLAGS.load_path) and FLAGS.checkpoint_dir:
+            load_path = os.path.join(FLAGS.checkpoint_dir, FLAGS.load_path)
+        else:
+            load_path = FLAGS.load_path
+    else:
+        checkpoint = tf.train.get_checkpoint_state(FLAGS.checkpoint_dir)
+        load_path = checkpoint.model_checkpoint_path
+    checkpoint_dir = os.path.dirname(load_path)
+
+    tf.convert_to_tensor(np.array(joint_info.names), name='joint_names')
+    tf.convert_to_tensor(np.array(joint_info.stick_figure_edges), name='joint_edges')
+
+    with tf.Session() as sess:
+        saver = tf.train.Saver()
+        saver.restore(sess, load_path)
+        frozen_graph_def = tf.graph_util.convert_variables_to_constants(
+            sess, tf.get_default_graph().as_graph_def(),
+            ['output', 'joint_names', 'joint_edges'])
+
+        transforms = [
+            'merge_duplicate_nodes',
+            'strip_unused_nodes',
+            'fold_constants(ignore_errors=true)',
+            'fold_batch_norms']
+
+        optimized_graph_def = TransformGraph(
+            frozen_graph_def, [], ['output', 'joint_names', 'joint_edges'], transforms)
+        tf.train.write_graph(
+            optimized_graph_def, logdir=checkpoint_dir, as_text=False,
+            name=FLAGS.export_file)
+        logging.info(f'Exported the model to {checkpoint_dir}/{FLAGS.export_file}')
 
 
 def save_results(f):

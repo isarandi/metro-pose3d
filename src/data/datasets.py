@@ -4,6 +4,7 @@ import logging
 
 import more_itertools
 import numpy as np
+import util
 from attrdict import AttrDict
 
 TRAIN = 0
@@ -31,6 +32,7 @@ class Pose3DDataset:
         return [
             np.nanmean(np.linalg.norm(coords3d[:, i] - coords3d[:, j], axis=-1))
             for i, j in self.joint_info.stick_figure_edges]
+
 
 
 class Pose3DExample:
@@ -99,6 +101,12 @@ class JointInfo:
             return 'l' + name[1:]
         else:
             return name
+
+    def permute_joints(self, permutation):
+        inv_perm = util.invert_permutation(permutation)
+        new_names = [self.names[x] for x in permutation]
+        new_edges = [(inv_perm[i], inv_perm[j]) for i,j in self.stick_figure_edges]
+        return JointInfo(new_names, new_edges)
 
 
 def make_h36m_incorrect_S9(*args, **kwargs):
