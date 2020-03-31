@@ -1,5 +1,7 @@
 # MeTRo 3D Human Pose Estimator
 
+![](example.png)
+
 ### What is this?
 
 Code to train and evaluate the MeTRo method, proposed in our paper
@@ -27,7 +29,6 @@ model=many_rn101_st16.pb
 wget https://omnomnom.vision.rwth-aachen.de/data/metro-pose3d/$model
 ./inference.py --model-path=$model
 ```
-![](example.png)
 
 These `.pb` files contain both the full TensorFlow graph and the weights.
 
