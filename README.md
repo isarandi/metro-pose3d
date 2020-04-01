@@ -3,7 +3,7 @@
 ![](example.png)
 
 ### What is this?
-Code to train and evaluate the MeTRo method, proposed in our paper:
+TensorFlow code to train and evaluate the MeTRo method, proposed in our paper:
 * István Sárándi, Timm Linder, Kai O. Arras, Bastian Leibe: [*"Metric-Scale Truncation-Robust Heatmaps for 3D Human Pose Estimation"*](https://arxiv.org/abs/2003.02953), IEEE Int. Conf. on Automatic Face and Gesture Recognition 2020.
 
 ### What does it do?
