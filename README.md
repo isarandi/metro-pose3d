@@ -52,3 +52,6 @@ If you use this work, please cite it as:
   note={in press}
 }
 ```
+
+### Contact
+For questions and comments about the paper or the code: István Sárándi (sarandi@vision.rwth-aachen.de)
