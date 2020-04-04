@@ -53,5 +53,5 @@ If you use this work, please cite it as:
 }
 ```
 
-### Contact
-For questions and comments about the paper or the code: István Sárándi (sarandi@vision.rwth-aachen.de)
+### Can I ask you something?
+Sure, create an issue or write an email to István Sárándi (sarandi@vision.rwth-aachen.de).
