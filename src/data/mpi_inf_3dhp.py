@@ -27,8 +27,8 @@ def make_mpi_inf_3dhp(camera_ids=(0, 1, 2, 4, 5, 6, 7, 8)):
     selected_joints = [7, 5, 14, 15, 16, 9, 10, 11, 23, 24, 25, 18, 19, 20, 3, 6, 4]
     joint_names = [all_short_names[j] for j in selected_joints]
 
-    edges = 'htop-head-neck-lsho-lelb-lwri,neck-rsho-relb-rwri,neck-spin-pelv-lhip-lkne-lank,' \
-            'pelv-rhip-rkne-rank'
+    edges = ('htop-head-neck-lsho-lelb-lwri,neck-rsho-relb-rwri,neck-spin-pelv-lhip-lkne-lank,'
+             'pelv-rhip-rkne-rank')
     joint_info = p3ds.JointInfo(joint_names, edges)
 
     root_3dhp = f'{paths.DATA_ROOT}/3dhp'
@@ -267,4 +267,3 @@ def make_3dhp_test_camera(
     intrinsic_matrix[:2] = np.diag(mm_to_px_factors) @ intrinsic_matrix[:2]
     cam = cameralib.Camera(origin, R, intrinsic_matrix, distortion, world_up=(0, 1, 0))
     return cam
-

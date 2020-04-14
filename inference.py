@@ -13,22 +13,34 @@ def main():
     parser.add_argument('--model-path', type=str, required=True)
     opts = parser.parse_args()
 
+    # 1. Get an image tensor. It could be a placeholder or an input pipeline using tf.data as well.
     images_numpy = np.stack([skimage.transform.resize(skimage.data.astronaut(), (256, 256))])
     images_tensor = tf.convert_to_tensor(images_numpy, dtype=tf.float32)
 
-    graph_def = tf.GraphDef()
-    with tf.gfile.GFile(opts.model_path, 'rb') as f:
-        graph_def.ParseFromString(f.read())
+    # 2. Build the pose estimation graph from the exported model
+    # That file also contains the joint names and skeleton edge connectivity as well.
+    poses_tensor, edges_tensor, joint_names_tensor = estimate_pose(images_tensor, opts.model_path)
 
-    poses_op, edges_op = tf.import_graph_def(
-        graph_def, input_map={'input:0': images_tensor}, return_elements=['output', 'joint_edges'])
-    poses_tensor = poses_op.outputs[0]
-    edges_tensor = edges_op.outputs[0]
-
+    # 3. Run the actual estimation
     with tf.Session() as sess:
         edges = sess.run(edges_tensor)
         poses_arr = sess.run(poses_tensor)
         visualize_pose(image=images_numpy[0], coords=poses_arr[0], edges=edges)
+
+
+def estimate_pose(images_tensor, model_path):
+    graph_def = tf.GraphDef()
+    with tf.gfile.GFile(model_path, 'rb') as f:
+        graph_def.ParseFromString(f.read())
+
+    poses_op, edges_op, joint_names_op = tf.import_graph_def(
+        graph_def, input_map={'input:0': images_tensor},
+        return_elements=['output', 'joint_edges', 'joint_names'])
+
+    poses_tensor = poses_op.outputs[0]
+    edges_tensor = edges_op.outputs[0]
+    joint_names_tensor = joint_names_op.outputs[0]
+    return poses_tensor, edges_tensor, joint_names_tensor
 
 
 def visualize_pose(image, coords, edges):

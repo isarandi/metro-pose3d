@@ -49,7 +49,7 @@ def extract_bounding_boxes(src_matfile_path):
     np.save(dst_file_path, bboxes)
 
 
-def extract_frames(src_video_path):
+def extract_frames(src_video_path, every_nth=(5, 64)):
     """Save every 5th and 64th frame from a video as images."""
     print('Processing', src_video_path)
     video_name = pathlib.Path(src_video_path).stem
@@ -58,7 +58,7 @@ def extract_frames(src_video_path):
 
     with imageio.get_reader(src_video_path, 'ffmpeg') as reader:
         for i_frame, frame in enumerate(reader):
-            if i_frame % 5 == 0 or i_frame % 64 == 0:
+            if any(i_frame % x == 0 for x in every_nth):
                 dst_filename = f'frame_{i_frame:06d}.jpg'
                 dst_path = os.path.join(dst_folder_path, dst_filename)
                 if not os.path.exists(dst_path):

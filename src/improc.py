@@ -53,6 +53,12 @@ def normalize_plusminus1(im):
     im = np.minimum(np.maximum(np.float32(-1), im), np.float32(1))
     return im
 
+@numba.jit(nopython=True)
+def normalize01(im):
+    im = im.astype(np.float32)
+    im /= 255
+    im = np.minimum(np.maximum(np.float32(-1), im), np.float32(1))
+    return im
 
 @numba.jit(nopython=True)
 def blend_image_numba(im1, im2, im2_weight):

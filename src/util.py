@@ -1,4 +1,3 @@
-import argparse
 import contextlib
 import ctypes
 import datetime
@@ -12,6 +11,7 @@ import multiprocessing as mp
 import multiprocessing.connection
 import os
 import os.path
+import paths
 import pickle
 import queue
 import signal
@@ -21,6 +21,8 @@ import timeit
 import traceback
 
 import numpy as np
+
+import paths
 
 TRAIN = 0
 VALID = 1
@@ -152,6 +154,12 @@ def dump_pickle(data, file_path, protocol=pickle.HIGHEST_PROTOCOL):
     ensure_path_exists(file_path)
     with open(file_path, 'wb') as f:
         pickle.dump(data, f, protocol)
+
+
+def dump_json(data, path):
+    ensure_path_exists(path)
+    with open(path, 'w') as file:
+        return json.dump(data, file)
 
 
 def write_file(content, path, is_binary=False):
@@ -465,7 +473,7 @@ def progressbar(*args, **kwargs):
         return args[0]
 
 
-def ensure_absolute_path(path, root):
+def ensure_absolute_path(path, root=paths.DATA_ROOT):
     if os.path.isabs(path):
         return path
     else:

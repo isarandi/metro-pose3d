@@ -65,7 +65,7 @@ def train():
 def test():
     logging.info('Test (eval) phase.')
     tf.reset_default_graph()
-    n_epochs = FLAGS.epochs if FLAGS.occlude_test or FLAGS.test_aug or FLAGS.multiepoch_test else 1
+    n_epochs = FLAGS.epochs if FLAGS.test_aug or FLAGS.multiepoch_test else 1
     t = build_graph(TEST, n_epochs=n_epochs, shuffle=False)
 
     test_counter = tfu.get_or_create_counter('testc')
@@ -88,8 +88,7 @@ def test():
 
     fetch_names = [
         'image_path', 'coords3d_true_orig_cam', 'coords3d_pred_orig_cam', 'coords3d_true_world',
-        'coords3d_pred_world', 'activity_name', 'scene_name',
-        'joint_validity_mask', 'confidences', 'coords3d_pred_backproj_orig_cam', 'compactness']
+        'coords3d_pred_world', 'activity_name', 'scene_name', 'joint_validity_mask']
     fetch_tensors = {fetch_name: t[fetch_name] for fetch_name in fetch_names}
 
     global_init_op = tf.global_variables_initializer()
@@ -177,7 +176,6 @@ def save_results(f):
         coords3d_pred=f.coords3d_pred_orig_cam[ordered_indices],
         coords3d_true_world=f.coords3d_true_world[ordered_indices],
         coords3d_pred_world=f.coords3d_pred_world[ordered_indices],
-        coords3d_pred_backproj=f.coords3d_pred_backproj_orig_cam[ordered_indices],
         activity_name=f.activity_name[ordered_indices],
         scene_name=f.scene_name[ordered_indices],
         joint_validity_mask=f.joint_validity_mask[ordered_indices],

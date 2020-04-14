@@ -25,14 +25,10 @@ def make_h36m(
     joint_names = (
         'rhip,rkne,rank,lhip,lkne,lank,tors,neck,head,htop,'
         'lsho,lelb,lwri,rsho,relb,rwri,pelv'.split(','))
-
-    j = ps3d.JointInfo.make_id_map(joint_names)
-    edges = [
-        (j.htop, j.head), (j.head, j.neck), (j.lsho, j.neck), (j.lelb, j.lsho), (j.lwri, j.lelb),
-        (j.rsho, j.neck), (j.relb, j.rsho), (j.rwri, j.relb), (j.neck, j.tors), (j.tors, j.pelv),
-        (j.lhip, j.pelv), (j.lkne, j.lhip), (j.lank, j.lkne), (j.rhip, j.pelv), (j.rkne, j.rhip),
-        (j.rank, j.rkne)]
-    joint_info = ps3d.JointInfo(j, edges)
+    edges = (
+        'htop-head-neck-lsho-lelb-lwri,neck-rsho-relb-rwri,'
+        'neck-tors-pelv-lhip-lkne-lank,pelv-rhip-rkne-rank')
+    joint_info = ps3d.JointInfo(joint_names, edges)
 
     if not util.all_disjoint(train_subjects, valid_subjects, test_subjects):
         raise Exception('Set of train, val and test subject must be disjoint.')
@@ -200,7 +196,7 @@ def get_examples(
 
     image_relfolder = f'h36m/S{i_subject}/Images/{activity_name}.{camera_name}'
     image_relpaths = [f'{image_relfolder}/frame_{i_frame:06d}.jpg'
-                   for i_frame in range(0, n_total_frames, frame_step)]
+                      for i_frame in range(0, n_total_frames, frame_step)]
 
     bbox_path = f'{h36m_root}/S{i_subject}/BBoxes/{activity_name}.{camera_name}.npy'
     bboxes = np.load(bbox_path)[::frame_step]
@@ -245,3 +241,43 @@ def get_activity_names(i_subject):
 
     activity_names = set(elem.split('.')[0] for elem in subdirs if '_' not in elem)
     return sorted(activity_names)
+
+
+def generate_poseviz_gt(i_subject, activity_name, camera_id):
+    camera_names = ['54138969', '55011271', '58860488', '60457274']
+    camera_name = camera_names[camera_id]
+    data, camera = get_examples(
+        i_subject, activity_name, camera_id, frame_step=1, correct_S9=True)
+
+    results = []
+    examples = []
+    for image_relpath, world_coords, bbox in data:
+        results.append({
+            'gt_poses': [world_coords.tolist()],
+            'camera_intrinsics': camera.intrinsic_matrix.tolist(),
+            'camera_extrinsics': camera.get_extrinsic_matrix().tolist(),
+            'image_path': image_relpath,
+            'bboxes': [bbox.tolist()]
+        })
+        ex = ps3d.Pose3DExample(
+            image_relpath, world_coords, bbox, camera, activity_name=activity_name)
+        examples.append(ex)
+
+    joint_names = (
+        'rhip,rkne,rank,lhip,lkne,lank,tors,neck,head,htop,'
+        'lsho,lelb,lwri,rsho,relb,rwri,pelv'.split(','))
+    edges = (
+        'htop-head-neck-lsho-lelb-lwri,neck-rsho-relb-rwri,'
+        'neck-tors-pelv-lhip-lkne-lank,pelv-rhip-rkne-rank')
+    joint_info = ps3d.JointInfo(joint_names, edges)
+    ds = ps3d.Pose3DDataset(joint_info, test_examples=examples)
+    util.dump_pickle(
+        ds, f'{paths.DATA_ROOT}/h36m/poseviz/S{i_subject}_{activity_name}_{camera_name}.pkl')
+
+    output = {}
+    output['joint_names'] = joint_info.names
+    output['stick_figure_edges'] = joint_info.stick_figure_edges
+    output['world_up'] = camera.world_up.tolist()
+    output['frame_infos'] = results
+    util.dump_json(
+        output, f'{paths.DATA_ROOT}/h36m/poseviz/S{i_subject}_{activity_name}_{camera_name}.json')
