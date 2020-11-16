@@ -1,3 +1,11 @@
+**Update: An extended journal version (MeTRAbs) of this paper has now been accepted!**
+
+**It's recommended to use the corresponding newer codebase, which has been updated to work under TensorFlow 2**
+
+[MeTRAbs repository at github.com/isarandi/metrabs](https://github.com/isarandi/metrabs)
+
+----
+
 # MeTRo 3D Human Pose Estimator
 
 ![](example.png)
