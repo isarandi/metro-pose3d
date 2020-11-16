@@ -47,9 +47,8 @@ If you use this work, please cite it as:
 @inproceedings{Sarandi20FG,
   title={Metric-Scale Truncation-Robust Heatmaps for 3{D} Human Pose Estimation},
   author={S\'ar\'andi, Istv\'an and Linder, Timm and Arras, Kai O. and Leibe, Bastian},
-  booktitle={Automatic Face and Gesture Recognition, 2020 IEEE Int. Conf. on},
+  booktitle={IEEE Int Conf Automatic Face and Gesture Recognition (FG)},
   year={2020},
-  note={in press}
 }
 ```
 
